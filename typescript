@@ -255,4 +255,322 @@ export default function DummiiTaskHome() {
       )}
     </div>
   );
+} import { NextResponse } from "next/server";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { createClient } from "@supabase/supabase-js";
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+);
+
+export async function POST(req: Request) {
+  try {
+    const { prompt, lat = 36.7468, lng = -119.7726 } = await req.json();
+
+    if (!prompt) {
+      return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
+    }
+
+    // Step 1: Use Gemini API to extract structured query parameters
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const geminiResult = await model.generateContent(`
+      Extract key search keywords and product category from this user voice request.
+      Respond strictly in valid JSON format without markdown code fences.
+
+      User Request: "${prompt}"
+
+      JSON Structure:
+      {
+        "keywords": ["keyword1", "keyword2"],
+        "category": "Auto | Grocery | Hardware | General"
+      }
+    `);
+
+    let parsedIntent = { keywords: [prompt], category: "General" };
+    try {
+      const textResponse = geminiResult.response.text().trim();
+      parsedIntent = JSON.parse(textResponse.replace(/```json|```/g, ""));
+    } catch (e) {
+      console.warn("Failed to parse Gemini JSON, falling back to raw prompt.");
+    }
+
+    // Step 2: Query Supabase PostGIS function for nearby local merchant bids
+    const { data: localBids, error } = await supabase.rpc("find_nearby_bids", {
+      user_lat: lat,
+      user_lng: lng,
+      radius_meters: 16093.4, // 10 miles
+    });
+
+    if (error) {
+      console.error("Supabase RPC Error:", error);
+    }
+
+    // Step 3: Format local bids or provide online fallback offer
+    const formattedDeals = (localBids || []).map((bid: any) => ({
+      id: bid.bid_id,
+      title: bid.title,
+      businessName: bid.business_name,
+      regularPrice: `$${bid.regular_price.toFixed(2)}`,
+      offerPrice: `$${bid.offer_price.toFixed(2)}`,
+      distance: `${bid.distance_miles.toFixed(1)} miles away`,
+      buyUrl: bid.buy_now_url,
+      isLocal: true,
+    }));
+
+    // Fallback if no local merchant bids exist
+    if (formattedDeals.length === 0) {
+      formattedDeals.push({
+        id: "online_fallback_1",
+        title: `${prompt} - Value Deal`,
+        businessName: "Walmart Online Partner",
+        regularPrice: "$45.00",
+        offerPrice: "$29.99",
+        distance: "Free Shipping",
+        buyUrl: `https://www.walmart.com/search?q=${encodeURIComponent(prompt)}&affilsrc=dummii-20`,
+        isLocal: false,
+      });
+    }
+
+    return NextResponse.json({
+      query: prompt,
+      intent: parsedIntent,
+      deals: formattedDeals,
+    });
+  } catch (err: any) {
+    console.error("Deal Match API Error:", err);
+    return NextResponse.json({ error: "Failed to fetch deals" }, { status: 500 });
+  }
+} "use client";
+
+import { useState, useEffect } from "react";
+import { Mic, Zap, ShoppingCart, ExternalLink, CheckSquare, Plus, Trash2 } from "lucide-react";
+
+interface Deal {
+  id: string;
+  title: string;
+  businessName: string;
+  regularPrice: string;
+  offerPrice: string;
+  distance: string;
+  buyUrl: string;
+  isLocal: boolean;
+}
+
+export default function DummiiFullStackApp() {
+  const [listening, setListening] = useState(false);
+  const [query, setQuery] = useState("");
+  const [frequentPrompts, setFrequentPrompts] = useState<string[]>([
+    "Milk on sale",
+    "Cheapest gas",
+    "4 tires installed",
+    "Work boots",
+  ]);
+  const [tasks, setTasks] = useState<{ id: string; label: string; checked: boolean }[]>([
+    { id: "1", label: "Check paper towel discount nearby", checked: false },
+    { id: "2", label: "Compare 1-gallon milk sales", checked: true },
+  ]);
+  const [newTaskLabel, setNewTaskLabel] = useState("");
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Voice Search Handler (Browser Web Speech API)
+  const handleVoiceInput = () => {
+    if (!("webkitSpeechRecognition" in window)) {
+      alert("Voice speech input is supported in Chrome, Edge, and Safari.");
+      return;
+    }
+
+    const recognition = new (window as any).webkitSpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+
+    recognition.onstart = () => setListening(true);
+    recognition.onend = () => setListening(false);
+
+    recognition.onresult = (e: any) => {
+      const text = e.results[0][0].transcript;
+      setQuery(text);
+      executeSearch(text);
+    };
+
+    recognition.start();
+  };
+
+  const executeSearch = async (searchPrompt: string) => {
+    setLoading(true);
+    setQuery(searchPrompt);
+    try {
+      const res = await fetch("/api/match-deals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: searchPrompt }),
+      });
+      const data = await res.json();
+      setDeals(data.deals || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addTask = () => {
+    if (!newTaskLabel.trim()) return;
+    setTasks([...tasks, { id: Date.now().toString(), label: newTaskLabel, checked: false }]);
+    setNewTaskLabel("");
+  };
+
+  const toggleTask = (id: string) => {
+    setTasks(tasks.map((t) => (t.id === id ? { ...t, checked: !t.checked } : t)));
+  };
+
+  const deleteTask = (id: string) => {
+    setTasks(tasks.filter((t) => t.id !== id));
+  };
+
+  return (
+    <main className="min-h-screen bg-amber-50 text-slate-900 px-4 py-8 max-w-md mx-auto flex flex-col justify-between">
+      <div>
+        {/* Header */}
+        <header className="text-center mb-6">
+          <h1 className="text-4xl font-black text-amber-600 tracking-tight">dummii</h1>
+          <p className="text-xs text-slate-600 font-bold uppercase tracking-wider mt-1">
+            Dummy Intelligence • Tap, Speak, Save
+          </p>
+        </header>
+
+        {/* Frequent Shortcuts */}
+        <section className="mb-6">
+          <div className="flex items-center space-x-1 mb-2 text-xs font-bold text-amber-900 uppercase">
+            <Zap className="w-4 h-4 text-amber-600" />
+            <span>Frequent Prompts</span>
+          </div>
+          <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-none">
+            {frequentPrompts.map((p, i) => (
+              <button
+                key={i}
+                onClick={() => executeSearch(p)}
+                className="px-3 py-2 bg-amber-200 hover:bg-amber-300 text-amber-950 font-bold text-xs rounded-xl whitespace-nowrap shadow-sm transition"
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* Big Mic Button */}
+        <div className="flex flex-col items-center mb-8">
+          <button
+            onClick={handleVoiceInput}
+            className={`w-28 h-28 rounded-full flex flex-col items-center justify-center shadow-xl active:scale-95 transition ${
+              listening ? "bg-red-500 text-white animate-pulse" : "bg-amber-500 hover:bg-amber-400 text-slate-950"
+            }`}
+          >
+            <Mic className="w-10 h-10" />
+            <span className="text-[10px] font-black uppercase mt-1">
+              {listening ? "Listening..." : "Tap & Speak"}
+            </span>
+          </button>
+          {query && (
+            <div className="mt-3 text-sm font-extrabold text-amber-900 bg-amber-100/80 px-4 py-1.5 rounded-full border border-amber-300">
+              "{query}"
+            </div>
+          )}
+        </div>
+
+        {/* Deal Cards Stream */}
+        {loading && (
+          <div className="text-center py-6 text-slate-500 font-bold text-sm animate-pulse">
+            Finding best local and merchant prices...
+          </div>
+        )}
+
+        {deals.length > 0 && (
+          <section className="space-y-4 mb-8">
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Matched Offers</h2>
+            {deals.map((deal) => (
+              <div key={deal.id} className="bg-white p-4 rounded-2xl shadow-md border border-amber-200 space-y-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                        deal.isLocal ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"
+                      }`}
+                    >
+                      {deal.isLocal ? `Local: ${deal.businessName}` : deal.businessName}
+                    </span>
+                    <h3 className="font-bold text-slate-900 text-sm mt-1">{deal.title}</h3>
+                    <p className="text-xs text-slate-500">{deal.distance}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-lg font-black text-emerald-600">{deal.offerPrice}</span>
+                    <p className="text-[10px] text-slate-400 line-through">{deal.regularPrice}</p>
+                  </div>
+                </div>
+
+                <a
+                  href={deal.buyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl flex items-center justify-center space-x-2 shadow transition"
+                >
+                  <ShoppingCart className="w-4 h-4" />
+                  <span>1-Click Buy / Reserve</span>
+                  <ExternalLink className="w-3 h-3 opacity-80" />
+                </a>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {/* Task & Chore List */}
+        <section className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="flex items-center space-x-2 mb-3">
+            <CheckSquare className="w-4 h-4 text-amber-600" />
+            <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Automated Tasks</h2>
+          </div>
+
+          <div className="space-y-2 mb-3">
+            {tasks.map((task) => (
+              <div key={task.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={task.checked}
+                    onChange={() => toggleTask(task.id)}
+                    className="w-4 h-4 accent-amber-600 rounded"
+                  />
+                  <span className={`text-xs font-medium ${task.checked ? "line-through text-slate-400" : "text-slate-800"}`}>
+                    {task.label}
+                  </span>
+                </div>
+                <button onClick={() => deleteTask(task.id)} className="text-slate-400 hover:text-red-500">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex space-x-2">
+            <input
+              type="text"
+              value={newTaskLabel}
+              onChange={(e) => setNewTaskLabel(e.target.value)}
+              placeholder="Add new chore..."
+              className="flex-1 px-3 py-1.5 text-xs bg-slate-100 rounded-xl border border-slate-200 focus:outline-none"
+            />
+            <button onClick={addTask} className="p-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold">
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <footer className="text-center text-[10px] text-slate-400 mt-8">
+        dummii © 2026 • Local Merchant Bidding Platform
+      </footer>
+    </main>
+  );
 }
