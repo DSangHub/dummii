@@ -1,0 +1,258 @@
+"use client";
+
+import { useState } from "react";
+import { Mic, ShoppingCart, Tag, ExternalLink } from "lucide-react";
+
+interface DealItem {
+  id: string;
+  title: string;
+  price: string;
+  originalPrice?: string;
+  store: string;
+  image: string;
+  buyUrl: string;
+}
+
+export default function DummiiHome() {
+  const [listening, setListening] = useState(false);
+  const [query, setQuery] = useState("");
+  const [deals, setDeals] = useState<DealItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Free Native Browser Speech Recognition
+  const startListening = () => {
+    if (!("webkitSpeechRecognition" in window)) {
+      alert("Voice input is not supported on this browser. Try Chrome or Safari.");
+      return;
+    }
+
+    const recognition = new (window as any).webkitSpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = "en-US";
+
+    recognition.onstart = () => setListening(true);
+    recognition.onend = () => setListening(false);
+
+    recognition.onresult = (event: any) => {
+      const text = event.results[0][0].transcript;
+      setQuery(text);
+      fetchDeals(text);
+    };
+
+    recognition.start();
+  };
+
+  const fetchDeals = async (searchQuery: string) => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/deals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: searchQuery }),
+      });
+      const data = await res.json();
+      setDeals(data.deals || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <main className="min-h-screen bg-amber-50 text-slate-900 flex flex-col items-center px-4 py-8">
+      {/* Dummii Brand Banner */}
+      <header className="text-center mb-6">
+        <h1 className="text-4xl font-extrabold tracking-tight text-amber-600">
+          dummii
+        </h1>
+        <p className="text-sm text-slate-600 font-medium">
+          Dummy Intelligence • Tap, speak, save money.
+        </p>
+      </header>
+
+      {/* Giant Voice Button */}
+      <div className="w-full max-w-sm flex flex-col items-center mb-8">
+        <button
+          onClick={startListening}
+          className={`w-32 h-32 rounded-full flex flex-col items-center justify-center shadow-xl transition transform active:scale-95 ${
+            listening
+              ? "bg-red-500 text-white animate-pulse"
+              : "bg-amber-500 hover:bg-amber-400 text-slate-900"
+          }`}
+        >
+          <Mic className="w-12 h-12" />
+          <span className="text-xs font-bold uppercase mt-1">
+            {listening ? "Listening..." : "Tap & Speak"}
+          </span>
+        </button>
+        {query && (
+          <p className="mt-4 text-lg font-bold text-slate-700 bg-white px-4 py-2 rounded-xl shadow-sm">
+            "{query}"
+          </p>
+        )}
+      </div>
+
+      {/* Deals List with Direct 1-Click Buy Buttons */}
+      <div className="w-full max-w-md space-y-4">
+        {loading && (
+          <div className="text-center py-8 text-slate-500 font-semibold animate-pulse">
+            Finding lowest prices and sales...
+          </div>
+        )}
+
+        {deals.map((item) => (
+          <div
+            key={item.id}
+            className="bg-white p-4 rounded-2xl shadow-md border border-slate-200 flex flex-col space-y-3"
+          >
+            <div className="flex space-x-3 items-center">
+              <img
+                src={item.image}
+                alt={item.title}
+                className="w-20 h-20 object-contain rounded-lg bg-slate-50 p-1"
+              />
+              <div className="flex-1">
+                <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md">
+                  {item.store}
+                </span>
+                <h2 className="text-sm font-bold text-slate-800 line-clamp-2 mt-1">
+                  {item.title}
+                </h2>
+                <div className="flex items-baseline space-x-2 mt-1">
+                  <span className="text-xl font-extrabold text-emerald-600">
+                    {item.price}
+                  </span>
+                  {item.originalPrice && (
+                    <span className="text-xs text-slate-400 line-through">
+                      {item.originalPrice}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* 1-Click Direct Merchant Buy Button */}
+            <a
+              href={item.buyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl flex items-center justify-center space-x-2 shadow-sm transition"
+            >
+              <ShoppingCart className="w-5 h-5" />
+              <span>Buy at {item.store}</span>
+              <ExternalLink className="w-4 h-4 ml-1 opacity-80" />
+            </a>
+          </div>
+        ))}
+      </div>
+    </main>
+  );
+} import { NextResponse } from "next/server";
+
+export async function POST(req: Request) {
+  try {
+    const { query } = await req.json();
+
+    // 1. Convert incoming voice query into structured search parameters
+    const cleanedQuery = encodeURIComponent(query);
+
+    // 2. Example: Fetch real deals from Google Shopping / Merchant API
+    // (Replace API URL with your specific merchant aggregator endpoint)
+    const affiliateTag = "dummii-20"; // Your Affiliate Publisher ID
+
+    // Simulated structured deals response matched directly to source merchants
+    const mockDeals = [
+      {
+        id: "1",
+        title: `${query} - On Sale Special`,
+        price: "$19.99",
+        originalPrice: "$29.99",
+        store: "Walmart",
+        image: "https://via.placeholder.com/150",
+        // Direct link with affiliate tag attached
+        buyUrl: `https://www.walmart.com/search?q=${cleanedQuery}&affilsrc=${affiliateTag}`,
+      },
+      {
+        id: "2",
+        title: `${query} Bulk Value Pack`,
+        price: "$14.49",
+        originalPrice: "$18.99",
+        store: "Target",
+        image: "https://via.placeholder.com/150",
+        buyUrl: `https://www.target.com/s?searchTerm=${cleanedQuery}&afid=${affiliateTag}`,
+      },
+    ];
+
+    return NextResponse.json({ deals: mockDeals });
+  } catch (err) {
+    return NextResponse.json({ error: "Failed to load deals" }, { status: 500 });
+  }
+} "use client";
+
+import { useState, useEffect } from "react";
+import { Mic, Plus, Trash2, Zap } from "lucide-react";
+
+export default function DummiiTaskHome() {
+  const [frequentPrompts, setFrequentPrompts] = useState<string[]>([]);
+  const [activeTask, setActiveTask] = useState("");
+
+  // Load frequently used prompts on app open
+  useEffect(() => {
+    const savedPrompts = localStorage.getItem("dummii_frequent_prompts");
+    if (savedPrompts) {
+      setFrequentPrompts(JSON.parse(savedPrompts));
+    } else {
+      // Default starter shortcuts for new users
+      setFrequentPrompts(["Milk on sale", "Cheapest Gas", "Paper Towels", "Work Boots"]);
+    }
+  }, []);
+
+  const runQuickPrompt = (promptText: string) => {
+    setActiveTask(promptText);
+    // Directly triggers the deal search engine
+  };
+
+  return (
+    <div className="min-h-screen bg-amber-50 text-slate-900 p-4 max-w-md mx-auto">
+      {/* 1. App Header */}
+      <h1 className="text-3xl font-extrabold text-amber-600 text-center">dummii</h1>
+      <p className="text-xs text-center text-slate-600 mb-6">Tap a shortcut or hold mic to run</p>
+
+      {/* 2. Frequent Prompts Carousel (App opens to this) */}
+      <div className="mb-6">
+        <div className="flex items-center space-x-1 mb-2 text-xs font-bold text-amber-800 uppercase tracking-wide">
+          <Zap className="w-4 h-4 text-amber-600" />
+          <span>Frequent Shortcuts</span>
+        </div>
+        <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-none">
+          {frequentPrompts.map((prompt, index) => (
+            <button
+              key={index}
+              onClick={() => runQuickPrompt(prompt)}
+              className="px-3 py-2 bg-amber-200 hover:bg-amber-300 text-amber-900 text-xs font-bold rounded-xl whitespace-nowrap shadow-sm transition"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 3. Big Voice Command Mic */}
+      <div className="flex justify-center mb-8">
+        <button className="w-24 h-24 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-900 flex flex-col items-center justify-center shadow-lg active:scale-95 transition">
+          <Mic className="w-10 h-10" />
+          <span className="text-[10px] font-bold uppercase mt-1">Speak Task</span>
+        </button>
+      </div>
+
+      {/* Display active task search state */}
+      {activeTask && (
+        <div className="p-3 bg-white rounded-xl shadow border border-amber-200 text-center font-bold text-sm mb-4">
+          Searching deals for: <span className="text-amber-700">"{activeTask}"</span>
+        </div>
+      )}
+    </div>
+  );
+}
