@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>dummii - Dummy Intelligence</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-amber-50 text-slate-900 font-sans min-h-screen p-4 max-w-md mx-auto flex flex-col justify-between">
+
+  <!-- Main Container -->
+  <div>
+    <!-- Header -->
+    <header class="text-center my-4">
+      <h1 class="text-4xl font-black text-amber-600 tracking-tight">dummii</h1>
+      <p class="text-xs text-slate-600 font-bold uppercase tracking-wider mt-1">
+        Dummy Intelligence • Tap, Speak, Save
+      </p>
+    </header>
+
+    <!-- Frequent Prompts Section -->
+    <section class="mb-6">
+      <div class="flex items-center space-x-1 mb-2 text-xs font-bold text-amber-900 uppercase">
+        <span>⚡ Frequent Prompts</span>
+      </div>
+      <div class="flex space-x-2 overflow-x-auto pb-2 scrollbar-none" id="shortcuts-list">
+        <!-- Injected via JavaScript -->
+      </div>
+    </section>
+
+    <!-- Big Mic Button -->
+    <div class="flex flex-col items-center mb-6">
+      <button 
+        id="mic-btn"
+        onclick="toggleVoiceInput()"
+        class="w-28 h-28 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 flex flex-col items-center justify-center shadow-xl active:scale-95 transition"
+      >
+        <span class="text-3xl">🎙️</span>
+        <span id="mic-label" class="text-[10px] font-black uppercase mt-1">Tap & Speak</span>
+      </button>
+      <div id="query-display" class="hidden mt-3 text-sm font-extrabold text-amber-900 bg-amber-100/80 px-4 py-1.5 rounded-full border border-amber-300">
+        ""
+      </div>
+    </div>
+
+    <!-- Deal Cards Stream -->
+    <section id="deals-section" class="space-y-3 mb-6 hidden">
+      <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Matched Local Offers</h2>
+      <div id="deals-container" class="space-y-3">
+        <!-- Injected via JavaScript -->
+      </div>
+    </section>
+
+    <!-- Task & Chore Checklist -->
+    <section class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider">📋 Automated Tasks</h2>
+      </div>
+
+      <div id="tasks-container" class="space-y-2 mb-3">
+        <!-- Injected via JavaScript -->
+      </div>
+
+      <div class="flex space-x-2">
+        <input 
+          type="text" 
+          id="new-task-input" 
+          placeholder="Add new chore..." 
+          class="flex-1 px-3 py-1.5 text-xs bg-slate-100 rounded-xl border border-slate-200 focus:outline-none"
+        />
+        <button 
+          onclick="addTask()" 
+          class="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold text-xs"
+        >
+          Add
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Footer -->
+  <footer class="text-center text-[10px] text-slate-400 py-4">
+    dummii © 2026 • Local Merchant Bidding Engine
+  </footer>
+
+  <!-- JavaScript App Logic -->
+  <script>
+    // State
+    const frequentPrompts = ["Milk on sale", "Cheapest gas", "4 tires installed", "Work boots"];
+    let tasks = [
+      { id: 1, label: "Check paper towel discount nearby", checked: false },
+      { id: 2, label: "Compare 1-gallon milk sales", checked: true }
+    ];
+    let isListening = false;
+
+    // Initialize Shortcuts
+    function renderShortcuts() {
+      const container = document.getElementById("shortcuts-list");
+      container.innerHTML = frequentPrompts.map(prompt => `
+        <button 
+          onclick="runSearch('${prompt}')"
+          class="px-3 py-2 bg-amber-200 hover:bg-amber-300 text-amber-950 font-bold text-xs rounded-xl whitespace-nowrap shadow-sm transition"
+        >
+          ${prompt}
+        </button>
+      `).join("");
+    }
+
+    // Voice Input Toggle (Web Speech API)
+    function toggleVoiceInput() {
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert("Voice recognition is not supported on this browser. Try Chrome, Edge, or Safari.");
+        return;
+      }
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+
+      const micBtn = document.getElementById("mic-btn");
+      const micLabel = document.getElementById("mic-label");
+
+      recognition.onstart = () => {
+        isListening = true;
+        micBtn.classList.remove("bg-amber-500", "hover:bg-amber-400");
+        micBtn.classList.add("bg-red-500", "animate-pulse", "text-white");
+        micLabel.innerText = "Listening...";
+      };
+
+      recognition.onend = () => {
+        isListening = false;
+        micBtn.classList.remove("bg-red-500", "animate-pulse", "text-white");
+        micBtn.classList.add("bg-amber-500", "hover:bg-amber-400");
+        micLabel.innerText = "Tap & Speak";
+      };
+
+      recognition.onresult = (e) => {
+        const text = e.results[0][0].transcript;
+        runSearch(text);
+      };
+
+      recognition.start();
+    }
+
+    // Execute Deal Search
+    function runSearch(promptText) {
+      const queryDisplay = document.getElementById("query-display");
+      queryDisplay.innerText = `"${promptText}"`;
+      queryDisplay.classList.remove("hidden");
+
+      const dealsSection = document.getElementById("deals-section");
+      const dealsContainer = document.getElementById("deals-container");
+      dealsSection.classList.remove("hidden");
+
+      // Simulated Merchant Bids Response
+      const sampleDeals = [
+        {
+          id: 1,
+          title: `${promptText} - Local Deal`,
+          business: "Fresno Local Merchant",
+          regularPrice: "$45.00",
+          offerPrice: "$29.99",
+          distance: "2.1 miles away",
+          isLocal: true,
+          buyUrl: "https://www.walmart.com"
+        },
+        {
+          id: 2,
+          title: `${promptText} Bulk Special`,
+          business: "Partner Store",
+          regularPrice: "$35.00",
+          offerPrice: "$24.50",
+          distance: "Free Shipping",
+          isLocal: false,
+          buyUrl: "https://www.target.com"
+        }
+      ];
+
+      dealsContainer.innerHTML = sampleDeals.map(deal => `
+        <div class="bg-white p-4 rounded-2xl shadow-md border border-amber-200 space-y-3">
+          <div class="flex justify-between items-start">
+            <div>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-md ${deal.isLocal ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}">
+                ${deal.isLocal ? 'Local: ' + deal.business : deal.business}
+              </span>
+              <h3 class="font-bold text-slate-900 text-sm mt-1">${deal.title}</h3>
+              <p class="text-xs text-slate-500">${deal.distance}</p>
+            </div>
+            <div class="text-right">
+              <span class="text-lg font-black text-emerald-600">${deal.offerPrice}</span>
+              <p class="text-[10px] text-slate-400 line-through">${deal.regularPrice}</p>
+            </div>
+          </div>
+          <a 
+            href="${deal.buyUrl}" 
+            target="_blank"
+            class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-xl flex items-center justify-center space-x-1 shadow transition text-xs"
+          >
+            <span>🛒 1-Click Buy / Reserve</span>
+          </a>
+        </div>
+      `).join("");
+    }
+
+    // Task List Management
+    function renderTasks() {
+      const container = document.getElementById("tasks-container");
+      container.innerHTML = tasks.map(task => `
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+          <div class="flex items-center space-x-2">
+            <input 
+              type="checkbox" 
+              ${task.checked ? 'checked' : ''} 
+              onclick="toggleTask(${task.id})"
+              class="w-4 h-4 accent-amber-600 rounded"
+            />
+            <span class="text-xs font-medium ${task.checked ? 'line-through text-slate-400' : 'text-slate-800'}">
+              ${task.label}
+            </span>
+          </div>
+          <button onclick="deleteTask(${task.id})" class="text-slate-400 hover:text-red-500 text-xs font-bold">
+            ✕
+          </button>
+        </div>
+      `).join("");
+    }
+
+    function addTask() {
+      const input = document.getElementById("new-task-input");
+      if (!input.value.trim()) return;
+      tasks.push({ id: Date.now(), label: input.value.trim(), checked: false });
+      input.value = "";
+      renderTasks();
+    }
+
+    function toggleTask(id) {
+      tasks = tasks.map(t => t.id === id ? { ...t, checked: !t.checked } : t);
+      renderTasks();
+    }
+
+    function deleteTask(id) {
+      tasks = tasks.filter(t => t.id !== id);
+      renderTasks();
+    }
+
+    // Initial Load
+    renderShortcuts();
+    renderTasks();
+  </script>
+</body>
+</html>
