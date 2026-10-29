@@ -21,3 +21,24 @@
     "buy_now_url": "https://dummii.app/checkout/req_88412"
   }
 }
+{
+  "name": "dummii - Dummy Intelligence",
+  "short_name": "dummii",
+  "description": "Tap, speak, and save money with instant local merchant bids.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fffbeb",
+  "theme_color": "#f59e0b",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
