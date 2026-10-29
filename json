@@ -1,0 +1,23 @@
+{
+  "business_profile": {
+    "merchant_id": "biz_fresno_auto_101",
+    "business_name": "Fresno Discount Tire & Auto",
+    "category": "Auto Service",
+    "location": {
+      "city": "Fresno",
+      "state": "CA",
+      "lat": 36.7468,
+      "lng": -119.7726
+    },
+    "auto_bid_enabled": true,
+    "min_margin_discount_pct": 10
+  },
+  "live_bid": {
+    "request_id": "req_88412",
+    "user_prompt": "4 new tires installed",
+    "original_retail_price": 380.00,
+    "bid_offer_price": 310.00,
+    "expiration_minutes": 30,
+    "buy_now_url": "https://dummii.app/checkout/req_88412"
+  }
+}
